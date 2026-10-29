@@ -104,8 +104,9 @@ jobs:
           # Unsigned builds are named app-release-unsigned.apk, so this cp also fails if signing was skipped.
           cp app/build/outputs/apk/release/app-release.apk "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK"
+          # The app shows the Release body in its update prompt, so it comes from a plain-text file in Portuguese.
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
           else
-            gh release create "$TAG" "$APK" --title "$TAG" --generate-notes --verify-tag
+            gh release create "$TAG" "$APK" --title "Aguenta ${TAG#v}" --notes-file notas-versao.txt --verify-tag
           fi

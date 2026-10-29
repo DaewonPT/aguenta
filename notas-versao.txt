@@ -1,0 +1,6 @@
+Primeira versão do Aguenta.
+• Teto diário recalculado a cada compra da Samsung Wallet, CGD e Wise
+• Alertas aos 80% com Foi Essencial, Congelar Gastos e Ajustar Saldo
+• Movimentos dos últimos 90 dias, com pesquisa e filtros por categoria
+• Lições do ciclo passado: onde dava para cortar
+• Atualizações automáticas a partir do GitHub
