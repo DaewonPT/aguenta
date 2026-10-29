@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aguenta</string>
+    <color name="obsidian">#0B0D13</color>
+    <color name="cyan">#00F5D4</color>
+    <!-- Igual à base do gradiente da app, para o arranque não piscar em preto. -->
+    <color name="indigo">#14082F</color>
+    <style name="Theme.Aguenta" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/indigo</item>
+    </style>
+</resources>

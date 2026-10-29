@@ -1,0 +1,13 @@
+.superpowers/
+*.jks
+*.keystore
+local.properties
+.gradle/
+build/
+.idea/
+*.apk
+.kotlin/
+keystore.properties
+# Instruções locais: ficam só no PC, nunca vão para o GitHub.
+CLAUDE.md
+**/CLAUDE.md
