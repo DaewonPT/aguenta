@@ -1,5 +1,4 @@
-Correção: compras da Caixa e do MB WAY passam a ser reconhecidas.
-• A app Caixadirecta não estava a ser lida (identificador errado)
-• O MB WAY passa a contar como banco
-• Reconhecimento mais tolerante com o texto das notificações
-• Novo diagnóstico em Ciclo: últimas notificações dos bancos, se foram reconhecidas, e botão para copiar a lista
+Ecrã de boas-vindas.
+• Na primeira abertura, três passos: acesso às notificações dos bancos, avisos do Aguenta e o teu ciclo (dia do salário e saldo)
+• Atalho para as definições da app quando o acesso às notificações aparece a cinzento
+• O pedido de notificações deixa de saltar logo ao abrir a app

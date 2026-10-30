@@ -1,6 +1,12 @@
 package pt.pixellusitano.aguenta.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.saveable.SaveableStateHolder
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -90,7 +96,10 @@ fun AppRoot(
     state: UiState,
     onIntent: (UiIntent) -> Unit,
     listenerOn: Boolean,
+    notificationsOn: Boolean,
     openListenerSettings: () -> Unit,
+    openAppSettings: () -> Unit,
+    requestNotifications: () -> Unit,
     openAdjust: Boolean,
     onAdjustShown: () -> Unit,
 ) {
@@ -104,34 +113,11 @@ fun AppRoot(
         }
     }
     Backdrop(if (state.survival) Coral else levelColor(state.snapshot?.level)) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 16.dp)) {
-            Box(Modifier.weight(1f)) {
-                AnimatedContent(
-                    targetState = tab,
-                    transitionSpec = {
-                        // Desliza para o lado do separador escolhido.
-                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                        (slideInHorizontally(tween(320)) { it * dir / 3 } + fadeIn(tween(320))) togetherWith
-                            (slideOutHorizontally(tween(320)) { -it * dir / 3 } + fadeOut(tween(200)))
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    label = "tab",
-                ) { t ->
-                    // Cada separador guarda os filtros e a posição do scroll quando se sai dele.
-                    tabStates.SaveableStateProvider(t.name) {
-                        when (t) {
-                            Tab.RADAR -> RadarScreen(state, listenerOn, openListenerSettings, onIntent) { entry = it }
-                            Tab.STREAM -> StreamScreen(state.history, onIntent)
-                            Tab.CYCLE -> CycleScreen(state.config, listenerOn, openListenerSettings, onIntent) { entry = it }
-                        }
-                    }
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 10.dp).glass(RoundedCornerShape(50)).padding(6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Tab.entries.forEach { Pill(it.label, tab == it) { tab = it } }
+        Crossfade(targetState = state.onboarded == false, animationSpec = tween(400), label = "welcome") { welcome ->
+            if (welcome) {
+                WelcomeScreen(state.config, listenerOn, notificationsOn, openListenerSettings, openAppSettings, requestNotifications, onIntent)
+            } else {
+                MainTabs(state, tab, { tab = it }, tabStates, listenerOn, openListenerSettings, onIntent) { entry = it }
             }
         }
     }
@@ -143,6 +129,122 @@ fun AppRoot(
     }
     UpdatePrompt()
 }
+
+@Composable
+private fun MainTabs(
+    state: UiState,
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    tabStates: SaveableStateHolder,
+    listenerOn: Boolean,
+    openListenerSettings: () -> Unit,
+    onIntent: (UiIntent) -> Unit,
+    onEntry: (Entry) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 16.dp)) {
+        Box(Modifier.weight(1f)) {
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    // Desliza para o lado do separador escolhido.
+                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (slideInHorizontally(tween(320)) { it * dir / 3 } + fadeIn(tween(320))) togetherWith
+                        (slideOutHorizontally(tween(320)) { -it * dir / 3 } + fadeOut(tween(200)))
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "tab",
+            ) { t ->
+                // Cada separador guarda os filtros e a posição do scroll quando se sai dele.
+                tabStates.SaveableStateProvider(t.name) {
+                    when (t) {
+                        Tab.RADAR -> RadarScreen(state, listenerOn, openListenerSettings, onIntent, onEntry)
+                        Tab.STREAM -> StreamScreen(state.history, onIntent)
+                        Tab.CYCLE -> CycleScreen(state.config, listenerOn, openListenerSettings, onIntent, onEntry)
+                    }
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 10.dp).glass(RoundedCornerShape(50)).padding(6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Tab.entries.forEach { Pill(it.label, tab == it) { onTab(it) } }
+        }
+    }
+}
+
+/** Primeira abertura: os três passos que na instalação real ninguém adivinha sozinho. Cada um marca-se quando fica feito. */
+@Composable
+private fun WelcomeScreen(
+    cfg: IncomeConfigEntity,
+    listenerOn: Boolean,
+    notificationsOn: Boolean,
+    openListenerSettings: () -> Unit,
+    openAppSettings: () -> Unit,
+    requestNotifications: () -> Unit,
+    onIntent: (UiIntent) -> Unit,
+) {
+    var day by rememberSaveable { mutableStateOf(cfg.paydayDay.toString()) }
+    var balance by rememberSaveable { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(
+        Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Header("Bem-vindo ao Aguenta")
+        Text("Três passos e passo a dizer-te, a cada compra, quanto ainda podes gastar hoje até ao salário.", color = Dim)
+        Step(1, "Ler as notificações dos bancos", listenerOn) {
+            Text("É assim que sei das compras na Samsung Wallet, Caixa, MB WAY e Wise. Tudo fica só no teu telemóvel.", color = Dim, fontSize = 13.sp)
+            if (!listenerOn) {
+                Pill("Dar acesso", true, onClick = openListenerSettings)
+                Text(
+                    "Se o Aguenta aparecer a cinzento: abre as definições da app, toca em ⋮ e em \"Permitir definições restritas\", e volta a dar acesso.",
+                    color = Dim, fontSize = 12.sp,
+                )
+                Pill("Definições da app", false, onClick = openAppSettings)
+            }
+        }
+        Step(2, "Avisos do Aguenta", notificationsOn) {
+            Text("Para te avisar quando chegares a 80% do teto do dia.", color = Dim, fontSize = 13.sp)
+            if (!notificationsOn) Pill("Permitir avisos", true, onClick = requestNotifications)
+        }
+        Step(3, "O teu ciclo", false) {
+            Field(day, "Dia do salário (1–31)", KeyboardType.Number) { day = it }
+            Field(balance, "Quanto tens para gastar até lá (€)") { balance = it }
+            Text("Já sem a renda e as contas fixas. O resto afinas no separador Ciclo.", color = Dim, fontSize = 12.sp)
+        }
+        error?.let { Text(it, color = Coral) }
+        Pill("Começar", true) {
+            val d = day.toIntOrNull()
+            val cents = parseEurosOrNull(balance)
+            if (d == null || d !in 1..31 || cents == null) {
+                error = "Indica o dia do salário (1–31) e quanto tens para gastar."
+            } else {
+                onIntent(UiIntent.SaveConfig(cfg.copy(paydayDay = d)))
+                onIntent(UiIntent.AdjustBalance(cents))
+                onIntent(UiIntent.FinishOnboarding)
+            }
+        }
+        TextButton(onClick = { onIntent(UiIntent.FinishOnboarding) }) { Text("Fazer isto depois", color = Dim) }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun Step(number: Int, title: String, done: Boolean, content: @Composable ColumnScope.() -> Unit) =
+    Column(Modifier.fillMaxWidth().glass().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).background(if (done) Cyan else Color.White.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(if (done) "✔" else "$number", color = if (done) Obsidian else Color.White, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        }
+        content()
+    }
 
 /** No máximo de 6 em 6 horas, avisa que há uma versão nova no GitHub e instala-a com um toque. */
 @Composable

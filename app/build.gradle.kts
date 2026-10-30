@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val versao = "0.1.1"
+val versao = "0.1.2"
 
 // Chave de lançamento: no CI vem dos segredos do GitHub; no PC vem de ../Chave Privada/keystore.properties (fora do repositório).
 val propsChave = rootProject.file("../Chave Privada/keystore.properties")

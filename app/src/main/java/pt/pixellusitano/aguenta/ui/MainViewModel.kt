@@ -20,6 +20,7 @@ data class UiState(
     val config: IncomeConfigEntity = IncomeConfigEntity(),
     val survivalUntil: Long = 0,
     val insights: List<Insight>? = null,
+    val onboarded: Boolean? = null, // null enquanto o DataStore carrega, para não piscar as boas-vindas a quem já as viu
 ) {
     val survival: Boolean get() = survivalUntil > System.currentTimeMillis()
 }
@@ -32,13 +33,14 @@ sealed interface UiIntent {
     data class Delete(val id: Long) : UiIntent
     data object Freeze : UiIntent
     data object Unfreeze : UiIntent
+    data object FinishOnboarding : UiIntent
 }
 
 class MainViewModel(private val app: AguentaApp) : ViewModel() {
     private val repo = app.repo
 
-    val state: StateFlow<UiState> = combine(repo.snapshot, repo.history, repo.config, repo.survivalUntil, repo.insights) { s, history, cfg, until, tips ->
-        UiState(s, history, cfg, until, tips)
+    val state: StateFlow<UiState> = combine(repo.snapshot, repo.history, repo.config, repo.appPrefs, repo.insights) { s, history, cfg, prefs, tips ->
+        UiState(s, history, cfg, prefs.survivalUntil, tips, prefs.onboarded)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
     fun onIntent(intent: UiIntent) {
@@ -51,6 +53,7 @@ class MainViewModel(private val app: AguentaApp) : ViewModel() {
                 is UiIntent.Delete -> repo.delete(intent.id)
                 UiIntent.Freeze -> repo.setSurvival(System.currentTimeMillis() + Alerts.SURVIVAL_MS)
                 UiIntent.Unfreeze -> repo.setSurvival(0)
+                UiIntent.FinishOnboarding -> repo.setOnboarded()
             }
             Alerts.refresh(app)
         }

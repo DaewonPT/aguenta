@@ -1,6 +1,7 @@
 package pt.pixellusitano.aguenta.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -40,7 +41,11 @@ object Prefs {
     val ALERT_LEVEL = intPreferencesKey("alert_level")
     val ACK_LEVEL = intPreferencesKey("ack_level")
     val ADVICE_CYCLE = longPreferencesKey("advice_cycle")
+    val ONBOARDED = booleanPreferencesKey("onboarded")
 }
+
+/** O que o ecrã precisa do DataStore: até quando dura o modo sobrevivência e se as boas-vindas já foram vistas. */
+data class AppPrefs(val survivalUntil: Long, val onboarded: Boolean)
 
 /** O serviço de notificações emite aqui; a app recolhe e grava. */
 object TransactionBus {
@@ -52,7 +57,7 @@ class Repository(private val ctx: Context, private val dao: AguentaDao) {
     private val mutex = Mutex()
 
     val config: Flow<IncomeConfigEntity> = dao.config().map { it ?: IncomeConfigEntity() }
-    val survivalUntil: Flow<Long> = ctx.dataStore.data.map { it[Prefs.SURVIVAL_UNTIL] ?: 0L }
+    val appPrefs: Flow<AppPrefs> = ctx.dataStore.data.map { AppPrefs(it[Prefs.SURVIVAL_UNTIL] ?: 0L, it[Prefs.ONBOARDED] ?: false) }
 
     private val today = flow { while (true) { emit(LocalDate.now()); delay(60_000) } }
         .distinctUntilChanged()
@@ -171,6 +176,7 @@ class Repository(private val ctx: Context, private val dao: AguentaDao) {
     suspend fun markLastEssential() { dao.lastSpend()?.let { dao.setEssential(it.id, true) } }
     suspend fun delete(id: Long) = dao.deleteTx(id)
     suspend fun setSurvival(until: Long) { ctx.dataStore.edit { it[Prefs.SURVIVAL_UNTIL] = until } }
+    suspend fun setOnboarded() { ctx.dataStore.edit { it[Prefs.ONBOARDED] = true } }
 
     private companion object {
         const val DUP_WINDOW_MS = 3 * 60_000L
