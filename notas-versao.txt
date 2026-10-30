@@ -1,6 +1,5 @@
-Primeira versão do Aguenta.
-• Teto diário recalculado a cada compra da Samsung Wallet, CGD e Wise
-• Alertas aos 80% com Foi Essencial, Congelar Gastos e Ajustar Saldo
-• Movimentos dos últimos 90 dias, com pesquisa e filtros por categoria
-• Lições do ciclo passado: onde dava para cortar
-• Atualizações automáticas a partir do GitHub
+Correção: compras da Caixa e do MB WAY passam a ser reconhecidas.
+• A app Caixadirecta não estava a ser lida (identificador errado)
+• O MB WAY passa a contar como banco
+• Reconhecimento mais tolerante com o texto das notificações
+• Novo diagnóstico em Ciclo: últimas notificações dos bancos, se foram reconhecidas, e botão para copiar a lista

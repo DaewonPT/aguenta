@@ -15,10 +15,11 @@ data class TransactionEvent(
 
 object BankingNotificationParser {
     val SAMSUNG = setOf("com.samsung.android.spay", "com.samsung.android.spayfw")
-    const val CGD = "pt.cgd.caixadirecta"
+    const val CGD = "cgd.pt.caixadirectaparticulares" // app Caixadirecta; o "pt.cgd.caixadirecta" da especificação não existe
+    const val MBWAY = "pt.sibs.android.mbway"
     const val WISE = "com.transferwise.android"
     const val MANUAL = "manual"
-    val PACKAGES = SAMSUNG + CGD + WISE
+    val PACKAGES = SAMSUNG + CGD + MBWAY + WISE
 
     // "1.250,00" | "12,50" | "12.50" | "45". O formato com milhares vem primeiro para "1.250,00" não parar em "1.25".
     private const val AMT = """(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:[,.]\d{2})?)"""
@@ -48,6 +49,21 @@ object BankingNotificationParser {
         opts,
     )
 
+    // Os textos reais da Caixa, MB WAY e Samsung ainda não estão confirmados: além do formato conhecido,
+    // aceita qualquer notificação desses bancos com uma palavra de gasto e um valor em euros.
+    private val SPEND_WORD = Regex(
+        """\b(?:compra|pagamento|pagou|pagaste|d[eé]bito|transa[çc][ãa]o|levantamento|gastou|gastaste|enviou|enviaste|transferiu|transferiste)\b""",
+        opts,
+    )
+    // Pedidos por pagar (MB WAY), operações falhadas e dinheiro a entrar não são gastos.
+    private val NOT_A_SPEND = Regex(
+        """\b(?:pedido|recusad\w*|cancelad\w*|falh\w*|n[ãa]o autorizad\w*|receb\w*|creditad\w*|reembolso|devolu[çc][ãa]o)\b""",
+        opts,
+    )
+    private val EUR_AMOUNT = Regex("""€\s*$AMT|$AMT\s*(?:€|EUR\b)""", opts)
+    // A loja vem depois do valor, a seguir a "em"/"a"/"-" e com maiúscula: "… com o cartão ****1234 em GLOVO".
+    private val MERCHANT_AFTER = Regex("""(?:^|\s)(?:-|em|a|no|na|ao|à|at)\s+(\p{Lu}[^\n.;,]*)""")
+
     private val TOPUP = Regex("""^(?:Adicionou|You added)""", RegexOption.IGNORE_CASE)
     private val OWN_ACCOUNT_KEYWORDS = listOf("caixa geral", "cgd", "transferwise", "wise payments", "wise europe")
 
@@ -57,15 +73,39 @@ object BankingNotificationParser {
             val merchant = cleanMerchant(m.groupValues.getOrNull(2))
             return TransactionEvent(toCents(m.groupValues[1]), merchant, income, pkg, timestamp, internal || isInternal(merchant))
         }
-        return when (pkg) {
-            in SAMSUNG -> SAMSUNG_WALLET_REGEX.find(body)?.let { event(it, income = false) }
-            CGD -> CGD_REGEX.find(body)?.let { event(it, income = false) }
+        val known = when (pkg) {
+            in SAMSUNG -> SAMSUNG_WALLET_REGEX
+            CGD, MBWAY -> CGD_REGEX
+            else -> null
+        }
+        return when {
+            known != null -> bankSpend(known, body)?.let { (cents, merchant) ->
+                TransactionEvent(cents, merchant, false, pkg, timestamp, isInternal(merchant))
+            }
             // Carregar a Wise a partir do banco é dinheiro que muda de conta, não rendimento.
-            WISE -> WISE_INCOME_REGEX.find(body)?.let { event(it, income = true, internal = TOPUP.containsMatchIn(it.value)) }
+            pkg == WISE -> WISE_INCOME_REGEX.find(body)?.let { event(it, income = true, internal = TOPUP.containsMatchIn(it.value)) }
                 ?: WISE_SPEND_REGEX.find(body)?.let { event(it, income = false) }
             else -> null
         }
     }
+
+    /** Samsung Wallet, Caixa e MB WAY: o formato conhecido primeiro; senão, uma palavra de gasto e o primeiro valor em euros. */
+    private fun bankSpend(known: Regex, body: String): Pair<Long, String?>? {
+        if (NOT_A_SPEND.containsMatchIn(body)) return null
+        known.find(body)?.let { m ->
+            val merchant = cleanMerchant(m.groupValues.getOrNull(2)) ?: cleanMerchant(merchantAfter(body, m.range.last + 1))
+            return toCents(m.groupValues[1]) to merchant
+        }
+        if (!SPEND_WORD.containsMatchIn(body)) return null
+        val m = EUR_AMOUNT.find(body) ?: return null
+        val cents = toCents(m.groupValues[1].ifEmpty { m.groupValues[2] })
+        return if (cents > 0) cents to cleanMerchant(merchantAfter(body, m.range.last + 1)) else null
+    }
+
+    private fun merchantAfter(body: String, from: Int) = MERCHANT_AFTER.find(body, from.coerceAtMost(body.length))?.groupValues?.get(1)
+
+    /** Para o diagnóstico: notificações de outras apps que parecem pagamentos (por exemplo, de um banco ainda não suportado). */
+    fun looksLikePayment(body: String) = SPEND_WORD.containsMatchIn(body) && EUR_AMOUNT.containsMatchIn(body)
 
     fun isInternal(merchant: String?, ownNames: List<String> = emptyList()): Boolean {
         val m = merchant?.lowercase() ?: return false
@@ -82,8 +122,11 @@ object BankingNotificationParser {
         return normalized.toBigDecimal().movePointRight(2).toLong()
     }
 
+    // "GLOVO efetuado com sucesso" → "GLOVO"
+    private val STATUS_TAIL = Regex("""\s+(?:foi\s+)?(?:efetuad|realizad|aprovad|autorizad|conclu[ií]d|com sucesso)\w*.*$""", RegexOption.IGNORE_CASE)
+
     private fun cleanMerchant(raw: String?): String? {
-        val m = raw?.trim()?.trimEnd('.', '!')?.take(60) ?: return null
+        val m = raw?.replace(STATUS_TAIL, "")?.trim()?.trimEnd('.', '!')?.take(60) ?: return null
         return m.takeUnless { it.isBlank() || it.startsWith("seu ", true) || it.startsWith("o seu ", true) }
     }
 

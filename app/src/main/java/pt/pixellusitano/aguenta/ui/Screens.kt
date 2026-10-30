@@ -57,6 +57,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.ClipData
+import android.content.ClipboardManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pt.pixellusitano.aguenta.BuildConfig
+import pt.pixellusitano.aguenta.service.NotificationLog
 import pt.pixellusitano.aguenta.update.NewVersion
 import pt.pixellusitano.aguenta.update.Updates
 import pt.pixellusitano.aguenta.data.CycleAnchor
@@ -440,6 +445,7 @@ private fun CycleScreen(
             Pill("Definir saldo atual", false) { onEntry(Entry.BALANCE) }
             Pill(if (listenerOn) "Acesso às notificações: ativo" else "Dar acesso às notificações", listenerOn, onClick = openListenerSettings)
         }
+        NotificationsDiagnostic()
         Text("Pixel Lusitano · contact@pixellusitano.com", color = Dim, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
     }
@@ -502,8 +508,42 @@ private fun dayTime(millis: Long) = DateTimeFormatter.ofPattern("dd/MM HH:mm").f
 private fun source(pkg: String) = when (pkg) {
     in BankingNotificationParser.SAMSUNG -> "Samsung Wallet"
     BankingNotificationParser.CGD -> "CGD"
+    BankingNotificationParser.MBWAY -> "MB WAY"
     BankingNotificationParser.WISE -> "Wise"
     else -> "Manual"
+}
+
+/** O que o serviço viu nas últimas notificações dos bancos, para afinar o reconhecimento com os textos reais. */
+@Composable
+private fun NotificationsDiagnostic() {
+    val ctx = LocalContext.current
+    val seen by NotificationLog.seen.collectAsStateWithLifecycle()
+    Column(Modifier.fillMaxWidth().glass().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("🔎 Notificações dos bancos", fontWeight = FontWeight.Bold)
+        Text(
+            "O que o Aguenta viu desde que abriu. Se uma compra ficou por reconhecer, copia a lista para afinar o reconhecimento.",
+            color = Dim, fontSize = 12.sp,
+        )
+        if (seen.isEmpty()) Text("Ainda nenhuma.", color = Dim, fontSize = 13.sp)
+        seen.forEach { n ->
+            val ok = n.result != "não reconhecida" && n.result != "app não suportada"
+            Column {
+                Text(
+                    "${if (ok) "✔" else "✖"} ${if (n.pkg in BankingNotificationParser.PACKAGES) source(n.pkg) else n.pkg} · ${dayTime(n.time)} · ${n.result}",
+                    color = if (ok) Cyan else Amber, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                )
+                Text(listOfNotNull(n.title, n.text).joinToString(" — "), fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (seen.isNotEmpty()) {
+            Pill("Copiar lista", false) {
+                val report = "Aguenta ${BuildConfig.VERSION_NAME}\n" +
+                    seen.joinToString("\n") { "[${it.pkg} ${dayTime(it.time)}] ${it.title} | ${it.text} → ${it.result}" }
+                ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Aguenta", report))
+                Toast.makeText(ctx, "Lista copiada", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 }
 
 private fun emoji(group: String) = when (group) {

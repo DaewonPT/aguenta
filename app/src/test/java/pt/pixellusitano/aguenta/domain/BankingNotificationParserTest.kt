@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import pt.pixellusitano.aguenta.domain.BankingNotificationParser.CGD
+import pt.pixellusitano.aguenta.domain.BankingNotificationParser.MBWAY
 import pt.pixellusitano.aguenta.domain.BankingNotificationParser.WISE
 import pt.pixellusitano.aguenta.domain.BankingNotificationParser.parse
 
@@ -71,6 +72,36 @@ class BankingNotificationParserTest {
         assertNull(parse(WISE, null, "Gastou 12,30 GBP em Tesco"))
         assertNull(parse(CGD, "Novidade", "Conheça o novo crédito pessoal da Caixa"))
         assertNull(parse("com.whatsapp", null, "Pagamento de 14,80 € em Pingo Doce"))
+    }
+
+    @Test fun mbWayGlovo() {
+        val e = parse(MBWAY, "MB WAY", "Pagamento de 18,60 € a GLOVO efetuado com sucesso")!!
+        assertEquals(1860L, e.amountCents)
+        assertEquals("GLOVO", e.merchant)
+    }
+
+    @Test fun cgdCompraComCartao() {
+        val e = parse(CGD, "Caixadirecta", "Compra de 18,60 EUR com o cartão ****1234 em GLOVO PORTUGAL")!!
+        assertEquals(1860L, e.amountCents)
+        assertEquals("GLOVO PORTUGAL", e.merchant)
+    }
+
+    @Test fun formatoDesconhecidoComPalavraDeGasto() {
+        val e = parse(CGD, "Movimento no cartão", "18,60 € - GLOVO. Compra autorizada")!!
+        assertEquals(1860L, e.amountCents)
+        assertEquals("GLOVO", e.merchant)
+        assertEquals(1860L, parse(CGD, null, "Compra com cartão de crédito de 18,60 EUR em GLOVO")!!.amountCents)
+    }
+
+    @Test fun pedidosRecebimentosERecusasNaoSaoGastos() {
+        assertNull(parse(MBWAY, null, "Pedido de pagamento de 10,00 € de João"))
+        assertNull(parse(MBWAY, null, "Recebeste 10,00 € de João"))
+        assertNull(parse(CGD, null, "Compra de 18,60 EUR em GLOVO recusada"))
+    }
+
+    @Test fun diagnosticoDeOutrasApps() {
+        assertTrue(BankingNotificationParser.looksLikePayment("Pagamento de 5,00 € em Café Central"))
+        assertFalse(BankingNotificationParser.looksLikePayment("Olá! Paguei 5€ do jantar"))
     }
 
     @Test fun categorias() {
