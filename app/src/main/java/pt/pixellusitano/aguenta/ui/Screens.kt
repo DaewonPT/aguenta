@@ -144,7 +144,7 @@ fun AppRoot(
     UpdatePrompt()
 }
 
-/** No máximo uma vez por dia, avisa que há uma versão nova no GitHub e instala-a com um toque. */
+/** No máximo de 6 em 6 horas, avisa que há uma versão nova no GitHub e instala-a com um toque. */
 @Composable
 private fun UpdatePrompt() {
     val ctx = LocalContext.current

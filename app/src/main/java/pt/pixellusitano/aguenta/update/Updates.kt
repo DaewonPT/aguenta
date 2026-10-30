@@ -36,12 +36,12 @@ fun parseLatest(json: String, currentCode: Int): NewVersion? {
 /** Atualizações pelo GitHub: o repositório é público, por isso não vai nenhum token dentro do APK. */
 object Updates {
     private const val LATEST = "https://api.github.com/repos/DaewonPT/aguenta/releases/latest"
-    private const val DAY_MS = 24 * 3_600_000L
+    private const val CHECK_EVERY_MS = 6 * 3_600_000L
 
-    /** No máximo uma vez por dia; a data só fica gravada depois de uma resposta, para sem rede tentar outra vez. */
+    /** No máximo de 6 em 6 horas; a hora só fica gravada depois de uma resposta, para sem rede tentar outra vez. */
     suspend fun check(ctx: Context): NewVersion? = withContext(Dispatchers.IO) {
         val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
-        if (System.currentTimeMillis() - prefs.getLong("last_check", 0) < DAY_MS) return@withContext null
+        if (System.currentTimeMillis() - prefs.getLong("last_check", 0) < CHECK_EVERY_MS) return@withContext null
         val json = get(LATEST) { it.bufferedReader().readText() }
         prefs.edit().putLong("last_check", System.currentTimeMillis()).apply()
         parseLatest(json, BuildConfig.VERSION_CODE)
